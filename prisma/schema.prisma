@@ -1,0 +1,139 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts   Account[]
+  sessions   Session[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model Strategy {
+  id          String   @id @default(cuid())
+  userId      String   // Provided by Clerk, no foreign key
+  name        String
+  description String?
+  language    String   @default("python")
+  code        String   @db.Text
+  version     Int      @default(1)
+  status      String   @default("draft")
+  phase       String   @default("strategy")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  constraints Constraint?
+  parameters  Parameter[]
+  backtests   Backtest[]
+
+  @@map("strategies")
+}
+
+model Constraint {
+  id                  String   @id @default(cuid())
+  strategyId          String   @unique
+  minProfitableTrades Int      @default(100)
+  maxDrawdown         Float    @default(20.0) // percentage
+  minProfitFactor     Float    @default(1.5)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  strategy Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+
+  @@map("constraints")
+}
+
+model Parameter {
+  id          String   @id @default(cuid())
+  strategyId  String
+  name        String
+  description String?
+  type        String   @default("int") // int | float | bool
+  defaultVal  String
+  minVal      String?
+  maxVal      String?
+  step        String?
+  createdAt   DateTime @default(now())
+
+  strategy Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+
+  @@map("parameters")
+}
+
+model Backtest {
+  id                String   @id @default(cuid())
+  strategyId        String
+  asset             String?
+  timeframe         String?
+  startDate         DateTime?
+  endDate           DateTime?
+  totalReturn       Float?
+  maxDrawdown       Float?
+  profitFactor      Float?
+  totalTrades       Int?
+  winRate           Float?
+  sharpeRatio       Float?
+  status            String   @default("pending") // pending | running | completed | failed
+  resultsJson       String?  @db.Text
+  aiAnalysis        String?  @db.Text
+  constraintsPassed Boolean?
+  createdAt         DateTime @default(now())
+
+  strategy Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+
+  @@map("backtests")
+}
+
