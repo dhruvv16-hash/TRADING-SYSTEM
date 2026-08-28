@@ -34,6 +34,11 @@ if database_url:
     # Render's database URL might start with postgres:// which SQLAlchemy 2.0 deprecated, so fix it
     if database_url.startswith("postgres://"):
         database_url = database_url.replace("postgres://", "postgresql://", 1)
+        
+    # psycopg2 does not support the 'pgbouncer=true' argument which is required by Prisma.
+    # We must strip it out so the Flask bot can connect to the Supabase pooler successfully.
+    database_url = database_url.replace("?pgbouncer=true&", "?").replace("?pgbouncer=true", "").replace("&pgbouncer=true", "")
+    
     app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 else:
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///local.db"
