@@ -18,7 +18,9 @@ export default async function StrategyLiveTradingPage({ params }: { params: Prom
 
   // Read from env — localhost for dev, real URL in production
   const botUrl = process.env.FLASK_BOT_URL || 'http://127.0.0.1:5000'
-  const isProduction = process.env.NODE_ENV === 'production' && !process.env.FLASK_BOT_URL
+  // Only show the offline warning if we are actually deployed to Vercel without a configured URL.
+  // This allows local `npm run start` (which sets NODE_ENV=production) to still connect to localhost.
+  const isVercelDeployed = process.env.VERCEL === '1' && !process.env.FLASK_BOT_URL
 
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto', height: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -34,7 +36,7 @@ export default async function StrategyLiveTradingPage({ params }: { params: Prom
       />
 
       <div style={{ flex: 1, marginTop: '20px', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
-        {isProduction ? (
+        {isVercelDeployed ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '400px', gap: '12px', color: 'var(--text-secondary)' }}>
             <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Flask Bot Not Configured</p>
             <p style={{ fontSize: '13px', textAlign: 'center', maxWidth: '400px' }}>
