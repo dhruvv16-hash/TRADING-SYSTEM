@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: strategyos-flask-bot
+    env: python
+    buildCommand: "cd algo-trading-bot && pip install -r requirements.txt"
+    startCommand: "cd algo-trading-bot && gunicorn --bind 0.0.0.0:`$PORT app:app"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: FLASK_ENV
+        value: production
+      - key: DELTA_API_KEY
+        sync: false
+      - key: DELTA_API_SECRET
+        sync: false
+      - key: PASSPHRASE
+        sync: false
+      - key: BOT_DATABASE_URL
+        fromDatabase:
+          name: strategyos-bot-db
+          property: connectionString
+
+  - type: psql
+    name: strategyos-bot-db
+    plan: free
+
