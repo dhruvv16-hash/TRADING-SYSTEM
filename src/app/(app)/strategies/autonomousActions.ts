@@ -37,24 +37,54 @@ export async function toggleAutonomousMode(strategyId: string, enabled: boolean)
   return { success: true, enabled }
 }
 
-export async function getAutonomousFeed(strategyId: string) {
+export async function getAutonomousFeed(_strategyId: string) {
   const { userId } = await auth()
   if (!userId) throw new Error("Unauthorized")
 
-  // Return realistic mock execution tick and simulated order router events
+  const botUrl = process.env.FLASK_BOT_URL || 'http://127.0.0.1:5000'
+
+  async function fetchBot(path: string) {
+    const res = await fetch(`${botUrl}${path}`, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(3000),
+    }).catch(() => null)
+    if (!res || !res.ok) return null
+    return res.json().catch(() => null)
+  }
+
+  const [pnlData, logsData] = await Promise.all([
+    fetchBot('/api/pnl'),
+    fetchBot('/api/logs'),
+  ])
+
+  const isOnline = pnlData !== null
+
+  // Map real open positions from /api/pnl
+  const activePositions = (pnlData?.open_positions || []).map((p: any) => ({
+    symbol: p.symbol || p.product_symbol || 'UNKNOWN',
+    size: p.size || p.quantity || 0,
+    entryPrice: p.entry_price || p.avg_entry_price || 0,
+    currentPrice: p.mark_price || p.last_price || 0,
+    pnl: p.unrealized_pnl != null ? `${p.unrealized_pnl >= 0 ? '+' : ''}${Number(p.unrealized_pnl).toFixed(2)}` : '0.00',
+    side: p.side || (p.size > 0 ? 'LONG' : 'SHORT'),
+  }))
+
+  // Map real trade logs from /api/logs
+  const recentEvents = (logsData || []).slice(0, 8).map((log: any) => ({
+    time: log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : 'Unknown',
+    type: log.action?.toUpperCase() || 'LOG',
+    msg: `${log.action || ''} ${log.ticker || ''} via ${log.source || 'webhook'}`.trim(),
+  }))
+
   return {
-    status: 'ONLINE',
+    status: isOnline ? 'ONLINE' : 'OFFLINE',
     heartbeat: new Date().toISOString(),
-    brokerConnection: 'Simulated Paper Broker (Direct FIX 4.4)',
-    latencyMs: 1.24,
-    activePositions: [
-      { symbol: 'AAPL', size: 150, entryPrice: 224.50, currentPrice: 226.15, pnl: '+1.18%', side: 'LONG' }
-    ],
-    recentEvents: [
-      { time: 'Just now', type: 'SIGNAL', msg: 'SMA(26) Cross Detected on 1d. Order routed to execution pool.' },
-      { time: '2m ago', type: 'RISK', msg: 'Drawdown governor check: 3.42% / 15.0% allowed. Green.' },
-      { time: '15m ago', type: 'FILL', msg: 'BUY 150 AAPL @ 224.50 (Slippage: 0.01%)' },
-      { time: '1h ago', type: 'HEARTBEAT', msg: 'Strategy OS Risk Daemon active. Volatility regime normal.' },
-    ]
+    brokerConnection: isOnline ? 'Delta Exchange (Live)' : 'Bot Offline — Start the Flask server',
+    latencyMs: isOnline ? null : null,
+    activePositions,
+    recentEvents,
+    totalPnl: pnlData?.total_unrealized_pnl ?? null,
+    botUrl,
   }
 }
+

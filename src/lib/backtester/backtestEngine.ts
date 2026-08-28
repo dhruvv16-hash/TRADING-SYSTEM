@@ -114,52 +114,9 @@ export async function runPythonBacktester(
         }
       }
 
-      console.warn("Python backtest fallback triggered. Exit code:", code, stderrData)
-      // High-fidelity fallback
-      if (mode === 'backtest') {
-        const totalReturn = parseFloat((Math.random() * 60 + 15).toFixed(2))
-        const maxDrawdown = parseFloat((Math.random() * 12 + 6).toFixed(2))
-        const profitFactor = parseFloat((Math.random() * 0.8 + 1.6).toFixed(2))
-        const totalTrades = Math.floor(Math.random() * 180 + 70)
-        const winRate = parseFloat((Math.random() * 15 + 50).toFixed(2))
-        const sharpeRatio = parseFloat((Math.random() * 1.2 + 1.2).toFixed(2))
-
-        resolve({
-          status: 'success',
-          metrics: {
-            totalReturn,
-            maxDrawdown,
-            profitFactor,
-            totalTrades,
-            winRate,
-            sharpeRatio,
-            startEquity: 100000,
-            endEquity: 100000 * (1 + totalReturn / 100)
-          },
-          equityCurve: Array.from({ length: 30 }, (_, i) => ({
-            date: new Date(Date.now() - (30 - i) * 86400000 * 30).toISOString().slice(0, 10),
-            equity: Math.round(100000 * (1 + (totalReturn / 100) * (i / 29) + (Math.sin(i) * 0.02)))
-          })),
-          tradesCount: totalTrades,
-          recentTrades: []
-        } as BacktestEngineResult)
-      } else if (mode === 'optimize' || mode === 'walk_forward') {
-        resolve({
-          status: 'success',
-          bestParams: options.params || {},
-          topCombinations: [],
-          totalEvaluated: 12
-        } as OptimizationEngineResult)
-      } else {
-        resolve({
-          status: 'success',
-          survivalRate: 94.5,
-          simulatedDrawdown: 11.2,
-          baselineDrawdown: 9.4,
-          confidenceScore: 88.8,
-          samplePaths: []
-        } as RobustnessEngineResult)
-      }
+      // Surface a real error — never silently fake financial results
+      const errDetail = stderrData?.trim() || `Process exited with code ${code}`
+      throw new Error(`Backtesting engine failed: ${errDetail}`)
     })
   })
 }

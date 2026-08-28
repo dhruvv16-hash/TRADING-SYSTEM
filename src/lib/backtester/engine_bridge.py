@@ -21,37 +21,75 @@ TRANSACTION_COST_PCT = 0.001
 SLIPPAGE_PCT = 0.0005
 CAPITAL_PER_TRADE = 100_000
 
+def _download_real_data(asset: str, target_path: Path) -> bool:
+    """Try to download real OHLCV data via yfinance and cache to disk."""
+    try:
+        import yfinance as yf
+        # Map internal asset names to Yahoo Finance tickers
+        ticker_map = {
+            "STOCK": "AAPL", "NIFTY50": "^NSEI", "BTCUSD": "BTC-USD",
+            "ETHUSD": "ETH-USD", "GOLD": "GC=F", "SPX": "^GSPC",
+        }
+        ticker = ticker_map.get(asset.upper(), asset)
+        df = yf.download(ticker, period="5y", interval="1d", auto_adjust=True, progress=False)
+        if df.empty:
+            return False
+        df = df.reset_index()
+        df.columns = [c[0].strip().lower() if isinstance(c, tuple) else c.strip().lower() for c in df.columns]
+        date_col = next((c for c in df.columns if c in ("date", "datetime", "index")), None)
+        if date_col:
+            df = df.rename(columns={date_col: "datetime"})
+        df["volume"] = df.get("volume", 0)
+        df[["datetime", "open", "high", "low", "close", "volume"]].to_csv(target_path, index=False)
+        return True
+    except Exception as e:
+        print(f"yfinance download failed for {asset}: {e}", file=sys.stderr)
+        return False
+
 def load_data(data_dir: Path, asset: str = "STOCK"):
     nifty_path = data_dir / "NIFTY50_minute.csv"
     stock_path = data_dir / "STOCK_minute.csv"
-    
-    # Check alternate filenames if specific asset requested
+
+    # Check for asset-specific file first
     if (data_dir / f"{asset}_minute.csv").exists():
         stock_path = data_dir / f"{asset}_minute.csv"
 
-    def _load(p, has_vol):
-        if not p.exists():
-            # Create synthetic fallback data if CSV is not found
-            dates = pd.date_range(start="2020-01-01", periods=1000, freq="B")
-            np.random.seed(42)
-            ret = np.random.normal(0.0004, 0.015, len(dates))
-            close = 100 * np.exp(np.cumsum(ret))
-            df = pd.DataFrame({
-                "datetime": dates,
-                "open": close * (1 + np.random.normal(0, 0.002, len(dates))),
-                "high": close * 1.01,
-                "low": close * 0.99,
-                "close": close,
-                "volume": 100000
-            })
-            return df
-        df = pd.read_csv(p)
-        df.columns = [c.strip().lower() for c in df.columns]
-        dt_col = next((c for c in df.columns if c in ("datetime", "date", "timestamp")), None)
-        df["datetime"] = pd.to_datetime(df[dt_col])
-        df = df.sort_values("datetime").reset_index(drop=True)
-        needed = ["open", "high", "low", "close"] + (["volume"] if has_vol else [])
-        return df[["datetime"] + needed]
+    # Cache real downloaded data next to the CSV data dir
+    cache_dir = data_dir / "yf_cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cached_stock = cache_dir / f"{asset}_daily.csv"
+    cached_nifty = cache_dir / "NIFTY50_daily.csv"
+
+    def _load(p, cache_p, asset_name, has_vol):
+        # 1. Try original CSV
+        if p.exists():
+            df = pd.read_csv(p)
+            df.columns = [c.strip().lower() for c in df.columns]
+            dt_col = next((c for c in df.columns if c in ("datetime", "date", "timestamp")), None)
+            df["datetime"] = pd.to_datetime(df[dt_col])
+            df = df.sort_values("datetime").reset_index(drop=True)
+            needed = ["open", "high", "low", "close"] + (["volume"] if has_vol else [])
+            return df[["datetime"] + [c for c in needed if c in df.columns]]
+
+        # 2. Try yfinance cache
+        if cache_p.exists():
+            df = pd.read_csv(cache_p)
+            df["datetime"] = pd.to_datetime(df["datetime"])
+            return df.sort_values("datetime").reset_index(drop=True)
+
+        # 3. Download real data via yfinance
+        print(f"No local CSV found for {asset_name}. Downloading real data via yfinance...", file=sys.stderr)
+        if _download_real_data(asset_name, cache_p):
+            df = pd.read_csv(cache_p)
+            df["datetime"] = pd.to_datetime(df["datetime"])
+            return df.sort_values("datetime").reset_index(drop=True)
+
+        # 4. Last resort: raise a clear error
+        raise FileNotFoundError(
+            f"No historical data available for '{asset_name}'. "
+            f"Expected CSV at '{p}' or internet access to download via yfinance. "
+            f"Install yfinance with: pip install yfinance"
+        )
 
     def _resample(min_df, has_vol):
         df = min_df.set_index("datetime")
@@ -64,16 +102,36 @@ def load_data(data_dir: Path, asset: str = "STOCK"):
         daily["date"] = pd.to_datetime(daily["date"]).dt.normalize()
         return daily
 
-    stock_daily = _resample(_load(stock_path, True), True)
-    nifty_daily = _resample(_load(nifty_path, False), False)
-    
+    stock_raw = _load(stock_path, cached_stock, asset, True)
+    # Resample only if data appears to be minute-level (many rows per day)
+    if len(stock_raw) > 0:
+        date_range_days = (stock_raw["datetime"].max() - stock_raw["datetime"].min()).days or 1
+        if len(stock_raw) / max(date_range_days, 1) > 2:
+            stock_daily = _resample(stock_raw, True)
+        else:
+            stock_daily = stock_raw.rename(columns={"datetime": "date"})
+            stock_daily["date"] = pd.to_datetime(stock_daily["date"]).dt.normalize()
+    else:
+        stock_daily = stock_raw.rename(columns={"datetime": "date"})
+
+    # Load Nifty benchmark (non-critical, use stock data as fallback)
+    try:
+        nifty_raw = _load(nifty_path, cached_nifty, "NIFTY50", False)
+        if len(nifty_raw) / max((nifty_raw["datetime"].max() - nifty_raw["datetime"].min()).days or 1, 1) > 2:
+            nifty_daily = _resample(nifty_raw, False)
+        else:
+            nifty_daily = nifty_raw.rename(columns={"datetime": "date"})
+    except Exception:
+        nifty_daily = pd.DataFrame()
+
     if len(nifty_daily) > 0 and "close" in nifty_daily.columns:
         merged = pd.merge(stock_daily, nifty_daily[["date", "close"]], on="date", how="inner", suffixes=("", "_nifty"))
     else:
         merged = stock_daily
         merged["close_nifty"] = merged["close"]
-        
+
     return merged.sort_values("date").reset_index(drop=True)
+
 
 def parse_and_run_signals(df: pd.DataFrame, code_str: str, params: dict):
     df_copy = df.copy()

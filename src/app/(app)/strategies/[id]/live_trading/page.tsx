@@ -16,6 +16,10 @@ export default async function StrategyLiveTradingPage({ params }: { params: Prom
 
   if (!strategy) notFound()
 
+  // Read from env — localhost for dev, real URL in production
+  const botUrl = process.env.FLASK_BOT_URL || 'http://127.0.0.1:5000'
+  const isProduction = process.env.NODE_ENV === 'production' && !process.env.FLASK_BOT_URL
+
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto', height: '100vh', display: 'flex', flexDirection: 'column' }}>
       <StrategyPipelineStepper
@@ -30,12 +34,22 @@ export default async function StrategyLiveTradingPage({ params }: { params: Prom
       />
 
       <div style={{ flex: 1, marginTop: '20px', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
-        <iframe 
-          src="http://127.0.0.1:5000" 
-          style={{ width: '100%', height: '100%', border: 'none', minHeight: '800px' }}
-          title="Algorithmic Trading System"
-        />
+        {isProduction ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '400px', gap: '12px', color: 'var(--text-secondary)' }}>
+            <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Flask Bot Not Configured</p>
+            <p style={{ fontSize: '13px', textAlign: 'center', maxWidth: '400px' }}>
+              To embed the live trading bot in production, set the <code style={{ fontFamily: 'monospace', background: 'var(--bg-elevated)', padding: '2px 6px', borderRadius: '3px' }}>FLASK_BOT_URL</code> environment variable in Vercel to your deployed bot URL.
+            </p>
+          </div>
+        ) : (
+          <iframe
+            src={botUrl}
+            style={{ width: '100%', height: '100%', border: 'none', minHeight: '800px' }}
+            title="Algorithmic Trading System"
+          />
+        )}
       </div>
     </div>
   )
 }
+

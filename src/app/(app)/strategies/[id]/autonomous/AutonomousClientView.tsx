@@ -1,11 +1,11 @@
 // src/app/(app)/strategies/[id]/autonomous/AutonomousClientView.tsx
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
-  Bot, Activity, Zap, RefreshCw, Power, CheckCircle, ShieldAlert, Sliders, Terminal
+  Bot, Activity, Zap, RefreshCw, Power, CheckCircle, ShieldAlert, Sliders, Terminal, WifiOff
 } from 'lucide-react'
-import { toggleAutonomousMode } from '../../autonomousActions'
+import { toggleAutonomousMode, getAutonomousFeed } from '../../autonomousActions'
 
 interface ViewProps {
   strategy: {
@@ -26,11 +26,30 @@ interface ViewProps {
 export function AutonomousClientView({ strategy }: ViewProps) {
   const [isActive, setIsActive] = useState(strategy.status === 'active')
   const [loading, setLoading] = useState(false)
-  const [logs, setLogs] = useState([
-    { time: '14:28:01', type: 'SYS', text: 'Strategy OS Risk Engine initialized. Heartbeat synced.' },
-    { time: '14:28:03', type: 'RISK', text: `Drawdown limit armed at ${strategy.constraints?.maxDrawdown || 15}%. Auto kill-switch ready.` },
-    { time: '14:28:05', type: 'AI', text: 'AI Supervisor: Market regime low-volatility. Execution priority normal.' },
-  ])
+  const [feed, setFeed] = useState<any>(null)
+  const [feedLoading, setFeedLoading] = useState(true)
+
+  const refreshFeed = useCallback(async () => {
+    try {
+      const data = await getAutonomousFeed(strategy.id)
+      setFeed(data)
+    } catch (e) {
+      console.error('Feed error:', e)
+    } finally {
+      setFeedLoading(false)
+    }
+  }, [strategy.id])
+
+  // Poll every 8 seconds for live updates
+  useEffect(() => {
+    refreshFeed()
+    const interval = setInterval(refreshFeed, 8000)
+    return () => clearInterval(interval)
+  }, [refreshFeed])
+
+  const logs = feed?.recentEvents || []
+  const positions = feed?.activePositions || []
+  const botOnline = feed?.status === 'ONLINE'
 
   async function handleToggle() {
     setLoading(true)
@@ -38,14 +57,7 @@ export function AutonomousClientView({ strategy }: ViewProps) {
       const nextState = !isActive
       await toggleAutonomousMode(strategy.id, nextState)
       setIsActive(nextState)
-      const newLog = {
-        time: new Date().toTimeString().split(' ')[0],
-        type: nextState ? 'ACTIVATE' : 'HALT',
-        text: nextState
-          ? 'AUTONOMOUS EXECUTION ARMED. Routing orders to simulated broker.'
-          : 'AUTONOMOUS EXECUTION PAUSED. All open orders safely parked.',
-      }
-      setLogs(prev => [newLog, ...prev])
+      await refreshFeed()
     } catch (e: any) {
       alert(e.message || 'Failed to toggle autonomous state')
     } finally {
@@ -53,8 +65,21 @@ export function AutonomousClientView({ strategy }: ViewProps) {
     }
   }
 
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {/* Bot Offline Banner */}
+      {!feedLoading && !botOnline && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '12px',
+          background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.4)',
+          borderRadius: '8px', padding: '12px 16px', fontSize: '13px', color: 'var(--error)',
+        }}>
+          <WifiOff size={16} />
+          <span><strong>Bot Offline:</strong> The Flask trading bot is not running. Start it with <code style={{ fontFamily: 'monospace', background: 'var(--bg-elevated)', padding: '2px 6px', borderRadius: '3px' }}>python app.py</code> in the <code style={{ fontFamily: 'monospace', background: 'var(--bg-elevated)', padding: '2px 6px', borderRadius: '3px' }}>algo-trading-bot</code> folder.</span>
+        </div>
+      )}
+
       {/* Top Banner Control */}
       <div style={{
         background: isActive ? 'rgba(34, 197, 94, 0.08)' : 'var(--bg-surface)',
@@ -157,37 +182,52 @@ export function AutonomousClientView({ strategy }: ViewProps) {
               </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--bg-base)', borderRadius: '6px', border: '1px solid var(--border)' }}>
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Order Router</span>
-              <span style={{ fontSize: '12px', fontFamily: 'monospace', fontWeight: 600, color: 'var(--accent)' }}>
-                Direct FIX 4.4 Simulation
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Bot Connection</span>
+              <span style={{ fontSize: '12px', fontFamily: 'monospace', fontWeight: 600, color: botOnline ? 'var(--success)' : 'var(--error)' }}>
+                {botOnline ? '● Live (Delta Exchange)' : '○ Offline'}
               </span>
             </div>
           </div>
         </div>
 
-        {/* AI Supervisor Panel (SmartX inspiration) */}
+        {/* Live Positions Panel */}
         <div style={{
           background: 'var(--bg-surface)',
           border: '1px solid var(--border)',
           borderRadius: '8px',
           padding: '20px',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-            <Zap size={16} color="var(--warning)" />
-            <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
-              AI Supervisor Diagnostics
-            </h3>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Zap size={16} color="var(--warning)" />
+              <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Live Positions
+              </h3>
+            </div>
+            {feed?.totalPnl != null && (
+              <span style={{ fontSize: '12px', fontFamily: 'monospace', fontWeight: 600, color: feed.totalPnl >= 0 ? 'var(--success)' : 'var(--error)' }}>
+                Total PnL: {feed.totalPnl >= 0 ? '+' : ''}{Number(feed.totalPnl).toFixed(2)}
+              </span>
+            )}
           </div>
 
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '16px' }}>
-            "The autonomous supervisor is monitoring signal generation for <strong>{strategy.name}</strong>. Current market volatility is within calibrated tolerances established during Phase 9 Robustness testing."
-          </p>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '11px', fontFamily: 'monospace', color: 'var(--text-muted)' }}>
-            <span>Regime: <strong style={{ color: 'var(--success)' }}>Trend Stable</strong></span>
-            <span>·</span>
-            <span>Confidence Score: <strong style={{ color: 'var(--accent)' }}>94.2%</strong></span>
-          </div>
+          {feedLoading ? (
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>Loading live data...</p>
+          ) : positions.length === 0 ? (
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+              {botOnline ? 'No open positions.' : 'Bot offline — cannot fetch positions.'}
+            </p>
+          ) : positions.map((pos: any, i: number) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--bg-base)', borderRadius: '6px', border: '1px solid var(--border)', marginBottom: '8px' }}>
+              <div>
+                <span style={{ fontSize: '12px', fontFamily: 'monospace', fontWeight: 600, color: 'var(--text-primary)' }}>{pos.symbol}</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: '8px' }}>{pos.side} · {pos.size}</span>
+              </div>
+              <span style={{ fontSize: '12px', fontFamily: 'monospace', fontWeight: 600, color: pos.pnl?.startsWith('+') ? 'var(--success)' : 'var(--error)' }}>
+                {pos.pnl}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -209,25 +249,29 @@ export function AutonomousClientView({ strategy }: ViewProps) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Terminal size={14} color="var(--text-muted)" />
             <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
-              Autonomous Execution Log
+              Trade Log
             </span>
           </div>
-          <span style={{ fontSize: '11px', fontFamily: 'monospace', color: 'var(--text-muted)' }}>
-            Real-time Feed · Local FIX Simulator
+          <span style={{ fontSize: '11px', fontFamily: 'monospace', color: botOnline ? 'var(--success)' : 'var(--text-muted)' }}>
+            {botOnline ? '● Live Feed · Polling every 8s' : '○ Bot Offline'}
           </span>
         </div>
 
         <div style={{ padding: '16px 20px', background: '#090B0E', display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
-          {logs.map((log, i) => (
+          {feedLoading ? (
+            <span style={{ fontSize: '12px', fontFamily: 'monospace', color: 'var(--text-muted)' }}>Connecting to bot...</span>
+          ) : logs.length === 0 ? (
+            <span style={{ fontSize: '12px', fontFamily: 'monospace', color: 'var(--text-muted)' }}>{botOnline ? 'No trade logs yet.' : 'Bot is offline. No logs available.'}</span>
+          ) : logs.map((log: any, i: number) => (
             <div key={i} style={{ display: 'flex', gap: '12px', fontSize: '12px', fontFamily: 'JetBrains Mono, monospace' }}>
               <span style={{ color: 'var(--text-muted)' }}>[{log.time}]</span>
               <span style={{
-                color: log.type === 'ACTIVATE' ? 'var(--success)' : log.type === 'HALT' ? 'var(--error)' : log.type === 'RISK' ? 'var(--warning)' : 'var(--accent)',
+                color: log.type === 'BUY' ? 'var(--success)' : log.type === 'SELL' ? 'var(--error)' : log.type === 'RISK' ? 'var(--warning)' : 'var(--accent)',
                 fontWeight: 600
               }}>
                 {log.type}:
               </span>
-              <span style={{ color: 'var(--text-primary)' }}>{log.text}</span>
+              <span style={{ color: 'var(--text-primary)' }}>{log.msg}</span>
             </div>
           ))}
         </div>
@@ -235,3 +279,4 @@ export function AutonomousClientView({ strategy }: ViewProps) {
     </div>
   )
 }
+
