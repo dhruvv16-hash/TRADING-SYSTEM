@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { currentUser } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db'
@@ -222,3 +223,4 @@ function StatCard({ label, value, icon, href, suffix }: any) {
     </Link>
   )
 }
+
