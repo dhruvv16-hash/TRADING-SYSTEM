@@ -1,3 +1,7 @@
+databases:
+  - name: strategyos-bot-db
+    plan: free
+
 services:
   - type: web
     name: strategyos-flask-bot
@@ -19,8 +23,4 @@ services:
         fromDatabase:
           name: strategyos-bot-db
           property: connectionString
-
-  - type: psql
-    name: strategyos-bot-db
-    plan: free
 
