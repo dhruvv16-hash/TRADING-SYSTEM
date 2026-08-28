@@ -7,37 +7,60 @@
 
 /* ―― Design Tokens ―――――――――――――――――――――――――――――――――――――――― */
 :root {
-  /* Backgrounds - Deeper black for terminal feel */
-  --bg-base:      #050505;
-  --bg-surface:   #09090B;
-  --bg-elevated:  #121214;
-  --bg-overlay:   #18181B;
+  /* LIGHT MODE (Default fallback, but we will force dark usually) - Off-white purple tint */
+  --bg-base:      #F7F6FA;
+  --bg-surface:   #FFFFFF;
+  --bg-elevated:  #F3F2F7;
+  --bg-overlay:   #EBE9F1;
 
-  /* Borders - Thinner, more subtle */
-  --border:       #1F2430;
-  --border-strong:#27272A;
-  --border-emphasis: #3F3F46;
+  /* Borders */
+  --border:       #E5E3EB;
+  --border-strong:#D4D1DC;
+  --border-emphasis: #C2BED0;
 
-  /* Text - High contrast */
-  --text-primary:   #FAFAFA;
-  --text-secondary: #A1A1AA;
-  --text-muted:     #52525B;
-  --text-disabled:  #3F3F46;
+  /* Text - Dark purple/black */
+  --text-primary:   #15121F;
+  --text-secondary: #5A566B;
+  --text-muted:     #827E94;
+  --text-disabled:  #A7A3B6;
 
-  /* Accent — Electric Cyan (Terminal vibe) */
-  --accent:       #00E5FF;
-  --accent-dim:   rgba(0, 229, 255, 0.15);
-  --accent-hover: #00B8CC;
+  /* Accent — Gold (Smart X vibe) */
+  --accent:       #C9A84C;
+  --accent-dim:   rgba(201, 168, 76, 0.15);
+  --accent-hover: #7A6012;
 
   /* Status */
   --success:      #10B981;
   --success-dim:  rgba(16, 185, 129, 0.12);
-  --warning:      #F59E0B;
-  --warning-dim:  rgba(245, 158, 11, 0.12);
+  --warning:      #C9A84C;
+  --warning-dim:  rgba(201, 168, 76, 0.12);
   --error:        #EF4444;
   --error-dim:    rgba(239, 68, 68, 0.12);
-  --info:         #6366F1;
-  --info-dim:     rgba(99, 102, 241, 0.12);
+  --info:         #8B5CF6;
+  --info-dim:     rgba(139, 92, 246, 0.12);
+}
+
+.dark, [data-theme="dark"] {
+  /* DARK MODE - Dark purple/black base */
+  --bg-base:      #0A0914;
+  --bg-surface:   #12101F;
+  --bg-elevated:  #1A172B;
+  --bg-overlay:   #221E38;
+
+  /* Borders */
+  --border:       #2A2640;
+  --border-strong:#3B3654;
+  --border-emphasis: #4F4A6E;
+
+  /* Text - Light purple-tinted white */
+  --text-primary:   #EEE8F5;
+  --text-secondary: #A19DB0;
+  --text-muted:     #6D6A7E;
+  --text-disabled:  #454256;
+
+  --accent:       #C9A84C;
+  --accent-dim:   rgba(201, 168, 76, 0.15);
+  --accent-hover: #E5C365;
 }
 
 /* ―― Base Reset ―――――――――――――――――――――――――――――――――――――――――― */
@@ -105,6 +128,11 @@ body {
   0% { box-shadow: 0 0 0 0 var(--accent-dim); }
   70% { box-shadow: 0 0 0 15px transparent; }
   100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+@keyframes sheen {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
 }
 
 .animate-fade-in-up {
