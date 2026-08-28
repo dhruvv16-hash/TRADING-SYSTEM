@@ -27,10 +27,9 @@ if os.getenv("FLASK_ENV") != "testing":
         logger.warning("Bot is starting, but missing environment variables! Please configure before trading.")
 
 # Initialize database
-# Use BOT_DATABASE_URL from Render, fallback to local sqlite database
-# We avoid generic DATABASE_URL because the Next.js app uses it for Prisma (Postgres),
-# and the Flask bot has a separate schema.
-database_url = os.getenv("BOT_DATABASE_URL")
+# Use DATABASE_URL from Render or local .env. The tables are prefixed with bot_ 
+# so it's safe to share the database with the Next.js app.
+database_url = os.getenv("DATABASE_URL")
 if database_url:
     # Render's database URL might start with postgres:// which SQLAlchemy 2.0 deprecated, so fix it
     if database_url.startswith("postgres://"):

@@ -3,7 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 
 class Account(db.Model):
-    __tablename__ = 'accounts'
+    __tablename__ = 'bot_accounts'
     
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
@@ -35,13 +35,13 @@ class Account(db.Model):
         }
 
 class GlobalSetting(db.Model):
-    __tablename__ = 'settings'
+    __tablename__ = 'bot_settings'
     
     key = db.Column(db.String(100), primary_key=True)
     value = db.Column(db.String(255), nullable=False)
 
 class TradeLog(db.Model):
-    __tablename__ = 'trade_logs'
+    __tablename__ = 'bot_trade_logs'
     
     id = db.Column(db.Integer, primary_key=True)
     timestamp = db.Column(db.DateTime, default=db.func.now(), nullable=False)
@@ -63,10 +63,10 @@ class TradeLog(db.Model):
         }
 
 class Strategy(db.Model):
-    __tablename__ = 'strategies'
+    __tablename__ = 'bot_strategies'
     
     id = db.Column(db.Integer, primary_key=True)
-    account_id = db.Column(db.Integer, db.ForeignKey('accounts.id', ondelete='CASCADE'), nullable=False)
+    account_id = db.Column(db.Integer, db.ForeignKey('bot_accounts.id', ondelete='CASCADE'), nullable=False)
     name = db.Column(db.String(100), nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     sizing_type = db.Column(db.String(20), default="percentage", nullable=False) # "percentage" or "fixed"
@@ -92,11 +92,11 @@ class Strategy(db.Model):
         }
 
 class StrategyState(db.Model):
-    __tablename__ = 'strategy_states'
+    __tablename__ = 'bot_strategy_states'
     
     id = db.Column(db.Integer, primary_key=True)
-    account_id = db.Column(db.Integer, db.ForeignKey('accounts.id', ondelete='CASCADE'), nullable=False)
-    strategy_id = db.Column(db.Integer, db.ForeignKey('strategies.id', ondelete='CASCADE'), nullable=True)
+    account_id = db.Column(db.Integer, db.ForeignKey('bot_accounts.id', ondelete='CASCADE'), nullable=False)
+    strategy_id = db.Column(db.Integer, db.ForeignKey('bot_strategies.id', ondelete='CASCADE'), nullable=True)
     symbol = db.Column(db.String(50), nullable=False)
     position_size = db.Column(db.Float, default=0.0, nullable=False) # 0 if flat, positive for long, negative for short
     entry_price = db.Column(db.Float, nullable=True)
@@ -130,7 +130,7 @@ class StrategyState(db.Model):
         }
 
 class LocalSignalLog(db.Model):
-    __tablename__ = 'local_signal_logs'
+    __tablename__ = 'bot_local_signal_logs'
     
     id = db.Column(db.Integer, primary_key=True)
     timestamp = db.Column(db.DateTime, default=db.func.now(), nullable=False)
@@ -160,7 +160,7 @@ class LocalSignalLog(db.Model):
         }
 
 class AIInsight(db.Model):
-    __tablename__ = 'ai_insights'
+    __tablename__ = 'bot_ai_insights'
     
     id = db.Column(db.Integer, primary_key=True)
     timestamp = db.Column(db.DateTime, default=db.func.now(), nullable=False)
